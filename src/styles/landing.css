@@ -1,0 +1,146 @@
+.landing-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.landing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.loading {
+  color: var(--fg-muted);
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--fg-muted);
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color var(--transition);
+}
+
+.doc-item:hover {
+  border-color: var(--accent);
+}
+
+.doc-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-title-input {
+  display: block;
+  width: 100%;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  font-family: var(--font-family);
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.doc-title-input:hover {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.doc-title-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+  background: var(--bg);
+}
+
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+.doc-open-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  color: var(--fg-muted);
+}
+
+.doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-focus {
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-focus:hover {
+  background: var(--bg-hover);
+}
+
+.btn-open {
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+}
+
+.btn-delete {
+  font-size: 0.8125rem;
+  padding: 4px 8px;
+  color: var(--fg-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn-delete:hover {
+  color: #cf222e;
+  background: var(--bg-hover);
+  border-color: transparent;
+}

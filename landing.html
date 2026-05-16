@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/landing.css" />
+</head>
+<body>
+  <div class="landing-container">
+    <header class="landing-header">
+      <h1>Markdown Editor</h1>
+      <button class="primary" id="btn-new">
+        <span>+</span>
+        <span>新規ドキュメント</span>
+      </button>
+    </header>
+
+    <main>
+      <div id="doc-list" class="doc-list">
+        <div class="loading">読み込み中...</div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/src/pages/landing.ts"></script>
+</body>
+</html>

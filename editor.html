@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/editor.css" />
+</head>
+<body>
+  <div class="editor-layout">
+    <header class="toolbar">
+      <div class="toolbar-left">
+        <a href="landing.html" class="btn-back" title="一覧に戻る">←</a>
+        <span class="doc-title" id="doc-title">無題</span>
+      </div>
+      <div class="toolbar-right">
+        <button id="btn-toggle-preview" title="プレビューを非表示" aria-label="プレビューを非表示"></button>
+        <select id="font-size-select" title="フォントサイズ" aria-label="フォントサイズ">
+          <option value="12">12px</option>
+          <option value="14">14px</option>
+          <option value="16" selected>16px</option>
+          <option value="18">18px</option>
+          <option value="20">20px</option>
+        </select>
+        <select id="theme-select" title="テーマ" aria-label="テーマ">
+          <option value="system">システム</option>
+          <option value="light">ライト</option>
+          <option value="dark">ダーク</option>
+        </select>
+        <button id="btn-help" title="キーバインドヘルプ">?</button>
+      </div>
+    </header>
+
+    <div class="editor-body" id="editor-body">
+      <div class="editor-pane" id="editor-pane">
+        <div id="codemirror-container"></div>
+      </div>
+      <div class="splitter" id="splitter"></div>
+      <div class="preview-pane" id="preview-pane">
+        <div class="preview-content" id="preview-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="help-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>キーボードショートカット</h2>
+        <button class="modal-close" id="btn-help-close">✕</button>
+      </div>
+      <table class="help-table">
+        <tbody>
+          <tr><td><kbd>Ctrl/Cmd + B</kbd></td><td><strong>太字</strong></td></tr>
+          <tr><td><kbd>Ctrl/Cmd + I</kbd></td><td><em>イタリック</em></td></tr>
+          <tr><td><kbd>Ctrl/Cmd + K</kbd></td><td>リンク挿入</td></tr>
+          <tr><td><kbd>Ctrl/Cmd + Shift + H</kbd></td><td>見出し (H1)</td></tr>
+          <tr><td><kbd>Ctrl/Cmd + Shift + C</kbd></td><td>コードブロック</td></tr>
+          <tr><td><kbd>Ctrl/Cmd + Shift + L</kbd></td><td>リスト</td></tr>
+          <tr><td><kbd>Tab</kbd></td><td>リストをインデント</td></tr>
+          <tr><td><kbd>Shift + Tab</kbd></td><td>リストをアウトデント</td></tr>
+          <tr><td><kbd>Ctrl/Cmd + Z</kbd></td><td>アンドゥ</td></tr>
+          <tr><td><kbd>Ctrl/Cmd + Shift + Z</kbd></td><td>リドゥ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="/src/pages/editor.ts"></script>
+</body>
+</html>

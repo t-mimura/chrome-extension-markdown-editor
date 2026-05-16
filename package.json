@@ -1,0 +1,27 @@
+{
+  "name": "markdown-editor",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "node scripts/generate-icons.mjs && tsc --noEmit && vite build",
+    "postinstall": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-markdown": "^6.3.2",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.3",
+    "codemirror": "^6.0.1",
+    "highlight.js": "^11.11.1",
+    "marked": "^14.1.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.317",
+    "@types/highlight.js": "^10.1.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.3.5"
+  }
+}
