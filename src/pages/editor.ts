@@ -22,7 +22,7 @@ import { registerTab, setTabDoc, broadcastSettingsChanged } from '../lib/messagi
 import { applyTheme, watchSystemTheme } from '../lib/theme.js';
 import { renderMarkdown, highlightCodeBlocks } from '../lib/markdown.js';
 import { ScrollSync } from '../lib/scroll-sync.js';
-import { storeImageFile, resolveLocalImages, revokeAllBlobUrls } from '../lib/images.js';
+import { storeImageFile, resolveLocalImages } from '../lib/images.js';
 import { scheduleAutoSync, onSyncStatusChange, getSyncStatus } from '../lib/sync.js';
 
 let currentDoc: Document | null = null;
@@ -193,10 +193,9 @@ function onEditorChange(content: string) {
 
 async function renderPreview(content: string) {
   const previewEl = document.getElementById('preview-content')!;
-  revokeAllBlobUrls();
   previewEl.innerHTML = renderMarkdown(content);
   highlightCodeBlocks(previewEl);
-  await resolveLocalImages(previewEl);
+  await resolveLocalImages(previewEl); // キャッシュ済み画像は同期で即時適用されるためちらつかない
 }
 
 function updateTitle() {
