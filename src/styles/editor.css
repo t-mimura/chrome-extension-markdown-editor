@@ -158,7 +158,7 @@
 .preview-content h5,
 .preview-content h6 {
   margin-top: 1.5em;
-  margin-bottom: 0.5em;
+  margin-bottom: 1em;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -172,9 +172,15 @@
 .preview-content h3 { font-size: 1.125em; }
 .preview-content h4 { font-size: 1em; }
 
-.preview-content h1:first-child,
-.preview-content h2:first-child,
-.preview-content h3:first-child {
+/* ドキュメント先頭の見出しは margin-top を消す。
+   各ブロックの前に .sync-anchor span が挿入されるため :first-child は使えず、
+   「最初の sync-anchor の直後にある見出し」を隣接セレクタで指定する。 */
+.preview-content > .sync-anchor:first-child + h1,
+.preview-content > .sync-anchor:first-child + h2,
+.preview-content > .sync-anchor:first-child + h3,
+.preview-content > .sync-anchor:first-child + h4,
+.preview-content > .sync-anchor:first-child + h5,
+.preview-content > .sync-anchor:first-child + h6 {
   margin-top: 0;
 }
 
