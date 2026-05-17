@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "node scripts/generate-icons.mjs && tsc --noEmit && vite build",
+    "package:store": "node scripts/package-for-store.mjs",
     "postinstall": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
