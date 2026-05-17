@@ -30,6 +30,7 @@ export default defineConfig({
       input: {
         landing: resolve(__dirname, 'landing.html'),
         editor: resolve(__dirname, 'editor.html'),
+        settings: resolve(__dirname, 'settings.html'),
         'background/service-worker': resolve(__dirname, 'src/background/service-worker.ts'),
       },
       output: {

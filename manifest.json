@@ -3,7 +3,7 @@
   "name": "Markdown Editor",
   "version": "1.0.0",
   "description": "A simple Markdown editor that runs in a browser tab",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "identity"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

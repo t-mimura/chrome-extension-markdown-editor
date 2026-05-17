@@ -5,12 +5,19 @@ import {
   deleteDoc,
   createNewDoc,
   getSettings,
+  getSyncSettings,
+  migrateFromChromeStorage,
   type Document,
 } from '../lib/storage.js';
 import { registerTab, getOpenDocs, focusTab } from '../lib/messaging.js';
 import { applyTheme, watchSystemTheme } from '../lib/theme.js';
+import {
+  syncAll, resolveConflict, onSyncStatusChange, getSyncStatus,
+  type ConflictItem,
+} from '../lib/sync.js';
 
 async function init() {
+  await migrateFromChromeStorage();
   const settings = await getSettings();
   document.documentElement.style.setProperty('--font-size', `${settings.fontSize}px`);
   applyTheme(settings.theme);
@@ -38,6 +45,78 @@ async function init() {
   });
 
   await renderDocList();
+
+  // 同期 UI
+  setupSyncUI();
+
+  // 起動時に自動同期（Drive が設定済みの場合のみ）
+  const syncSettings = await getSyncSettings();
+  if (syncSettings.clientId && syncSettings.refreshToken) {
+    runSync();
+  }
+}
+
+function setupSyncUI() {
+  const btnSync = document.getElementById('btn-sync')!;
+  const statusEl = document.getElementById('sync-status')!;
+
+  const updateStatus = (status: ReturnType<typeof getSyncStatus>) => {
+    statusEl.className = `sync-status sync-${status}`;
+    const labels: Record<string, string> = {
+      idle: '同期済み',
+      syncing: '同期中...',
+      error: '同期エラー',
+      conflict: '競合あり',
+    };
+    statusEl.title = labels[status] ?? '';
+  };
+  updateStatus(getSyncStatus());
+  onSyncStatusChange(updateStatus);
+
+  btnSync.addEventListener('click', () => runSync());
+}
+
+async function runSync() {
+  const result = await syncAll();
+
+  // pull があればリストを更新
+  if (result.pulled > 0) {
+    await renderDocList();
+  }
+
+  // コンフリクトを順番に処理
+  for (const conflict of result.conflicts) {
+    await showConflictModal(conflict);
+  }
+}
+
+function showConflictModal(conflict: ConflictItem): Promise<void> {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('conflict-modal')!;
+    const localMeta = document.getElementById('conflict-local-meta')!;
+    const remoteMeta = document.getElementById('conflict-remote-meta')!;
+    const localPreview = document.getElementById('conflict-local-preview')!;
+    const remotePreview = document.getElementById('conflict-remote-preview')!;
+
+    const fmt = (ts: number) => new Date(ts).toLocaleString('ja-JP');
+    localMeta.textContent = `${fmt(conflict.local.updatedAt)} · ${conflict.local.charCount}文字`;
+    remoteMeta.textContent = `${conflict.remote.deviceName} · ${fmt(conflict.remote.updatedAt)} · ${conflict.remote.charCount}文字`;
+    localPreview.textContent = conflict.local.content.slice(0, 300);
+    remotePreview.textContent = conflict.remote.content.slice(0, 300);
+
+    modal.classList.remove('hidden');
+
+    const handleChoice = async (choice: 'local' | 'remote') => {
+      modal.classList.add('hidden');
+      await resolveConflict(conflict, choice);
+      await renderDocList();
+      resolve();
+    };
+
+    modal.querySelectorAll<HTMLButtonElement>('[data-choice]').forEach((btn) => {
+      btn.onclick = () => handleChoice(btn.dataset.choice as 'local' | 'remote');
+    });
+  });
 }
 
 async function renderDocList() {

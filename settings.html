@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>設定 — Markdown Editor</title>
+  <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/settings.css" />
+</head>
+<body>
+  <div class="settings-container">
+    <header class="settings-header">
+      <a href="landing.html" class="btn-back" title="戻る">←</a>
+      <h1>設定</h1>
+    </header>
+
+    <section class="settings-section">
+      <h2>Google Drive 同期</h2>
+      <p class="settings-desc">
+        ドキュメントと画像を Google Drive にバックアップし、複数デバイス間で同期します。
+      </p>
+
+      <div class="settings-field">
+        <label for="device-name">このデバイスの名前</label>
+        <input type="text" id="device-name" placeholder="例: MacBook Air" />
+        <span class="settings-hint">コンフリクト発生時の表示に使われます</span>
+      </div>
+
+      <div class="settings-field">
+        <label for="client-id">Google OAuth Client ID</label>
+        <input type="text" id="client-id" placeholder="xxxx.apps.googleusercontent.com" />
+        <span class="settings-hint">
+          <a href="#" id="setup-guide-toggle">設定方法を見る ▾</a>
+        </span>
+      </div>
+
+      <div id="setup-guide" class="setup-guide hidden">
+        <ol>
+          <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> でプロジェクトを作成</li>
+          <li>「APIとサービス」→「ライブラリ」で <strong>Google Drive API</strong> を有効化</li>
+          <li>「APIとサービス」→「認証情報」→「認証情報を作成」→「OAuth 2.0 クライアント ID」を選択</li>
+          <li>アプリケーションの種類: <strong>ウェブ アプリケーション</strong></li>
+          <li>承認済みのリダイレクト URI に以下を追加:<br>
+            <code id="redirect-uri-display" class="code-block">読み込み中...</code>
+          </li>
+          <li>作成されたクライアント ID を上のフィールドに入力</li>
+        </ol>
+      </div>
+
+      <div class="settings-auth">
+        <div id="auth-status" class="auth-status auth-disconnected">
+          <span id="auth-status-text">未接続</span>
+        </div>
+        <div class="auth-buttons">
+          <button id="btn-connect" class="primary">Google アカウントに接続</button>
+          <button id="btn-disconnect" class="hidden">接続を解除</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="settings-actions">
+      <button id="btn-save" class="primary">保存</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/pages/settings.ts"></script>
+</body>
+</html>

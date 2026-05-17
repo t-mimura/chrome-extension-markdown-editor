@@ -153,6 +153,24 @@ select:focus {
   outline-offset: 1px;
 }
 
+/* 同期ステータスインジケーター */
+.sync-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sync-idle    { background: var(--border); }
+.sync-syncing { background: var(--accent); animation: sync-pulse 1s infinite; }
+.sync-error   { background: #cf222e; }
+.sync-conflict { background: #d97706; }
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

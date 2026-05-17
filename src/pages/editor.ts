@@ -13,6 +13,7 @@ import {
   getSettings,
   saveSettings,
   createNewDoc,
+  migrateFromChromeStorage,
   type Document,
   type FontSize,
   type Theme,
@@ -21,6 +22,8 @@ import { registerTab, setTabDoc, broadcastSettingsChanged } from '../lib/messagi
 import { applyTheme, watchSystemTheme } from '../lib/theme.js';
 import { renderMarkdown, highlightCodeBlocks } from '../lib/markdown.js';
 import { ScrollSync } from '../lib/scroll-sync.js';
+import { storeImageFile, resolveLocalImages, revokeAllBlobUrls } from '../lib/images.js';
+import { scheduleAutoSync, onSyncStatusChange, getSyncStatus } from '../lib/sync.js';
 
 let currentDoc: Document | null = null;
 let editorView: EditorView | null = null;
@@ -45,6 +48,8 @@ const ICON_SINGLE =
   `</svg>`;
 
 async function init() {
+  await migrateFromChromeStorage();
+
   const params = new URLSearchParams(window.location.search);
   const docId = params.get('docId');
   const isNew = params.get('new') === '1';
@@ -88,10 +93,11 @@ async function init() {
   previewEl.addEventListener('scroll', () => scrollSync?.onPreviewScroll(), { passive: true });
 
   buildEditor(currentDoc.content);
-  renderPreview(currentDoc.content);
+  await renderPreview(currentDoc.content);
   setupSplitter();
   setupToolbar();
   setupHelpModal();
+  setupImageDrop();
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SETTINGS_CHANGED') {
@@ -180,14 +186,17 @@ function onEditorChange(content: string) {
     currentDoc = { ...currentDoc!, content, updatedAt: Date.now() };
     await saveDoc(currentDoc);
     updateTitle();
-    renderPreview(content);
+    await renderPreview(content);
+    scheduleAutoSync(); // ローカル保存後 15 秒で Drive へ自動同期
   }, SAVE_DEBOUNCE_MS);
 }
 
-function renderPreview(content: string) {
+async function renderPreview(content: string) {
   const previewEl = document.getElementById('preview-content')!;
+  revokeAllBlobUrls();
   previewEl.innerHTML = renderMarkdown(content);
   highlightCodeBlocks(previewEl);
+  await resolveLocalImages(previewEl);
 }
 
 function updateTitle() {
@@ -250,8 +259,21 @@ function setupToolbar() {
   const fontSizeSelect = document.getElementById('font-size-select') as HTMLSelectElement;
   const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
   const btnTogglePreview = document.getElementById('btn-toggle-preview')!;
+  const syncStatusEl = document.getElementById('sync-status');
 
   setPreviewButtonIcon(btnTogglePreview, true);
+
+  if (syncStatusEl) {
+    const labels: Record<string, string> = {
+      idle: '同期済み', syncing: '同期中...', error: '同期エラー', conflict: '競合あり',
+    };
+    const updateSync = (s: ReturnType<typeof getSyncStatus>) => {
+      syncStatusEl.className = `sync-status sync-${s}`;
+      syncStatusEl.title = labels[s] ?? '';
+    };
+    updateSync(getSyncStatus());
+    onSyncStatusChange(updateSync);
+  }
 
   fontSizeSelect.addEventListener('change', async () => {
     const newFontSize = parseInt(fontSizeSelect.value, 10) as FontSize;
@@ -307,6 +329,64 @@ function setupHelpModal() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') modal.classList.add('hidden');
+  });
+}
+
+// ── 画像挿入 ──────────────────────────────────────────────────────────
+
+async function insertImageMarkdown(markdown: string) {
+  if (!editorView) return;
+  const { state, dispatch } = editorView;
+  const range = state.selection.main;
+  dispatch(state.update({
+    changes: { from: range.from, to: range.to, insert: markdown },
+    selection: EditorSelection.cursor(range.from + markdown.length),
+  }, { scrollIntoView: true, userEvent: 'input' }));
+}
+
+function setupImageDrop() {
+  const editorPane = document.getElementById('editor-pane')!;
+
+  editorPane.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    editorPane.classList.add('drag-over');
+  });
+
+  editorPane.addEventListener('dragleave', (e) => {
+    if (!editorPane.contains(e.relatedTarget as Node)) {
+      editorPane.classList.remove('drag-over');
+    }
+  });
+
+  editorPane.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    editorPane.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer?.files ?? []).filter(
+      (f) => f.type.startsWith('image/'),
+    );
+    for (const file of files) {
+      const md = await storeImageFile(file);
+      await insertImageMarkdown(md);
+    }
+  });
+
+  // ツールバーボタンからのファイル選択
+  const btnImage = document.getElementById('btn-insert-image');
+  if (!btnImage) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+
+  btnImage.addEventListener('click', () => input.click());
+  input.addEventListener('change', async () => {
+    for (const file of Array.from(input.files ?? [])) {
+      const md = await storeImageFile(file);
+      await insertImageMarkdown(md);
+    }
+    input.value = '';
   });
 }
 
