@@ -153,6 +153,11 @@ select:focus {
   outline-offset: 1px;
 }
 
+/* 汎用 hidden ユーティリティ */
+.hidden {
+  display: none !important;
+}
+
 /* 同期ステータスインジケーター */
 .sync-status {
   width: 8px;

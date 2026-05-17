@@ -12,30 +12,36 @@ async function init() {
   });
 
   const deviceNameInput = document.getElementById('device-name') as HTMLInputElement;
+  const deviceNameHint = document.getElementById('device-name-hint')!;
   const authStatusEl = document.getElementById('auth-status')!;
   const authStatusText = document.getElementById('auth-status-text')!;
   const btnConnect = document.getElementById('btn-connect')!;
   const btnDisconnect = document.getElementById('btn-disconnect')!;
-  const btnSave = document.getElementById('btn-save')!;
 
   deviceNameInput.value = syncSettings.deviceName;
   updateAuthStatus(await isConnected());
 
-  btnSave.addEventListener('click', async () => {
-    await saveSyncSettings({ deviceName: deviceNameInput.value.trim() });
-    btnSave.textContent = '保存しました ✓';
-    setTimeout(() => { btnSave.textContent = '保存'; }, 2000);
+  // デバイス名は入力欄からフォーカスが外れた時点で自動保存
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  deviceNameInput.addEventListener('input', () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      await saveSyncSettings({ deviceName: deviceNameInput.value.trim() });
+      deviceNameHint.textContent = '保存しました ✓';
+      setTimeout(() => {
+        deviceNameHint.textContent = 'コンフリクト発生時に「どのデバイスで編集したか」として表示されます';
+      }, 2000);
+    }, 800);
   });
 
   btnConnect.addEventListener('click', async () => {
-    // デバイス名が未入力なら先に保存を促す
-    const deviceName = deviceNameInput.value.trim();
-    if (!deviceName) {
+    // デバイス名が未入力なら先に入力を促す
+    if (!deviceNameInput.value.trim()) {
       alert('デバイス名を入力してから接続してください');
       deviceNameInput.focus();
       return;
     }
-    await saveSyncSettings({ deviceName });
+    await saveSyncSettings({ deviceName: deviceNameInput.value.trim() });
 
     btnConnect.textContent = '接続中...';
     btnConnect.setAttribute('disabled', 'true');

@@ -23,7 +23,7 @@
       <div class="settings-field">
         <label for="device-name">このデバイスの名前</label>
         <input type="text" id="device-name" placeholder="例: MacBook Air" />
-        <span class="settings-hint">コンフリクト発生時に「どのデバイスで編集したか」として表示されます</span>
+        <span class="settings-hint" id="device-name-hint">コンフリクト発生時に「どのデバイスで編集したか」として表示されます</span>
       </div>
 
       <div class="settings-auth">
@@ -37,9 +37,6 @@
       </div>
     </section>
 
-    <div class="settings-actions">
-      <button id="btn-save" class="primary">保存</button>
-    </div>
   </div>
 
   <script type="module" src="/src/pages/settings.ts"></script>

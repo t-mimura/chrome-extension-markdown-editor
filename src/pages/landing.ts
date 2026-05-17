@@ -72,7 +72,34 @@ function setupSyncUI() {
   updateStatus(getSyncStatus());
   onSyncStatusChange(updateStatus);
 
-  btnSync.addEventListener('click', () => runSync());
+  btnSync.addEventListener('click', async () => {
+    if (!(await isConnected())) {
+      showToast('Google Drive が未接続です。設定から接続してください。', 'settings.html');
+      return;
+    }
+    runSync();
+  });
+}
+
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showToast(message: string, linkHref?: string) {
+  const existing = document.getElementById('landing-toast');
+  if (existing) existing.remove();
+  if (_toastTimer) clearTimeout(_toastTimer);
+
+  const toast = document.createElement('div');
+  toast.id = 'landing-toast';
+  toast.className = 'landing-toast';
+  toast.innerHTML = linkHref
+    ? `${message} <a href="${linkHref}">設定を開く</a>`
+    : message;
+  document.body.appendChild(toast);
+
+  _toastTimer = setTimeout(() => {
+    toast.classList.add('toast-fade-out');
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
 async function runSync() {
