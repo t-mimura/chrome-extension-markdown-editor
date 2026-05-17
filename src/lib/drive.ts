@@ -1,7 +1,9 @@
 /**
  * Google Drive API ラッパー
  *
- * 認証: OAuth 2.0 PKCE + chrome.identity.launchWebAuthFlow
+ * 認証: chrome.identity.getAuthToken()（Chrome Extension 専用 OAuth）
+ *   - manifest.json の oauth2 セクションで設定済みの client_id を使用
+ *   - Chrome がトークンのキャッシュ・リフレッシュを自動管理
  * スコープ: drive.file（拡張機能が作成したファイルのみアクセス）
  *
  * フォルダ構成:
@@ -11,15 +13,11 @@
  *       images/{imageId}   (バイナリ, mimeType は Drive メタデータに記録)
  */
 
-import { getSyncSettings, saveSyncSettings } from './storage.js';
-import { OAUTH_CLIENT_ID } from './config.js';
+import { getSyncSettings } from './storage.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const FOLDER_NAME = 'Markdown Editor';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 export type DriveDocMeta = {
   updatedAt: number;
@@ -32,121 +30,53 @@ export type DriveDoc = DriveDocMeta & {
   content: string;
 };
 
-// ── PKCE ヘルパー ─────────────────────────────────────────────────────
-
-function generateCodeVerifier(): string {
-  const arr = new Uint8Array(48);
-  crypto.getRandomValues(arr);
-  return btoa(String.fromCharCode(...arr))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const data = new TextEncoder().encode(verifier);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
-
 // ── 認証 ─────────────────────────────────────────────────────────────
 
-export function getRedirectUri(): string {
-  return chrome.identity.getRedirectURL();
+/**
+ * Chrome が管理するアクセストークンを取得する。
+ * interactive=true: 未認証なら Google 認証画面を表示
+ */
+function getAccessToken(interactive: boolean): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (result) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message ?? '認証エラー'));
+        return;
+      }
+      // @types/chrome >= 0.0.317 では result が GetAuthTokenResult オブジェクト
+      const token = typeof result === 'string' ? result : (result as { token?: string })?.token;
+      if (!token) {
+        reject(new Error('トークンが取得できませんでした'));
+        return;
+      }
+      resolve(token);
+    });
+  });
 }
 
+/** 認証フローを起動する（設定画面の「接続」ボタンから呼ばれる） */
 export async function authorize(): Promise<void> {
-  const verifier = generateCodeVerifier();
-  const challenge = await generateCodeChallenge(verifier);
-  const redirectUri = getRedirectUri();
-
-  const params = new URLSearchParams({
-    client_id: OAUTH_CLIENT_ID,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: SCOPES,
-    code_challenge: challenge,
-    code_challenge_method: 'S256',
-    access_type: 'offline',
-    prompt: 'consent',
-  });
-
-  const responseUrl = await new Promise<string>((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow(
-      { url: `${AUTH_URL}?${params}`, interactive: true },
-      (url) => {
-        if (chrome.runtime.lastError || !url) {
-          reject(new Error(chrome.runtime.lastError?.message ?? '認証がキャンセルされました'));
-        } else {
-          resolve(url);
-        }
-      },
-    );
-  });
-
-  const code = new URL(responseUrl).searchParams.get('code');
-  if (!code) throw new Error('認証コードが取得できませんでした');
-
-  const tokenRes = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: OAUTH_CLIENT_ID,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-      code_verifier: verifier,
-    }),
-  });
-
-  if (!tokenRes.ok) throw new Error(`トークン取得失敗: ${tokenRes.status}`);
-  const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string };
-
-  if (!tokens.refresh_token) throw new Error('リフレッシュトークンが取得できませんでした');
-  await saveSyncSettings({ refreshToken: tokens.refresh_token });
-
-  _cachedToken = { token: tokens.access_token, expiresAt: Date.now() + 3500_000 };
+  await getAccessToken(true); // Google 認証画面を表示
 }
 
+/** キャッシュを削除して接続を解除する */
 export async function revokeAuth(): Promise<void> {
-  _cachedToken = null;
-  await saveSyncSettings({ refreshToken: null });
-}
-
-// ── アクセストークン管理 ──────────────────────────────────────────────
-
-type TokenCache = { token: string; expiresAt: number };
-let _cachedToken: TokenCache | null = null;
-
-async function getAccessToken(): Promise<string> {
-  if (_cachedToken && _cachedToken.expiresAt > Date.now() + 60_000) {
-    return _cachedToken.token;
+  const token = await getAccessToken(false).catch(() => null);
+  if (token) {
+    await new Promise<void>((resolve) =>
+      chrome.identity.removeCachedAuthToken({ token }, resolve),
+    );
   }
-
-  const { refreshToken } = await getSyncSettings();
-  if (!refreshToken) throw new Error('Google Drive が未接続です');
-
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: OAUTH_CLIENT_ID,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-
-  if (!res.ok) throw new Error(`トークンリフレッシュ失敗: ${res.status}`);
-  const data = await res.json() as { access_token: string; expires_in: number };
-  _cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
-  return _cachedToken.token;
 }
 
-async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = await getAccessToken();
+/** Drive が接続済みかどうかを確認する（認証画面なし） */
+export async function isConnected(): Promise<boolean> {
+  const token = await getAccessToken(false).catch(() => null);
+  return token !== null;
+}
+
+async function apiFetch(url: string, options: RequestInit = {}, retry = true): Promise<Response> {
+  const token = await getAccessToken(true);
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -154,6 +84,15 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
       ...(options.headers ?? {}),
     },
   });
+
+  // 401 はトークン期限切れ → キャッシュを削除して1回リトライ
+  if (res.status === 401 && retry) {
+    await new Promise<void>((resolve) =>
+      chrome.identity.removeCachedAuthToken({ token }, resolve),
+    );
+    return apiFetch(url, options, false);
+  }
+
   if (!res.ok) throw new Error(`Drive API エラー: ${res.status} ${await res.text()}`);
   return res;
 }
@@ -346,5 +285,4 @@ export function resetFolderCache(): void {
   _rootFolderId = null;
   _documentsFolderId = null;
   _imagesFolderId = null;
-  _cachedToken = null;
 }

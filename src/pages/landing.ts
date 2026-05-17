@@ -5,7 +5,6 @@ import {
   deleteDoc,
   createNewDoc,
   getSettings,
-  getSyncSettings,
   migrateFromChromeStorage,
   type Document,
 } from '../lib/storage.js';
@@ -15,6 +14,7 @@ import {
   syncAll, resolveConflict, onSyncStatusChange, getSyncStatus,
   type ConflictItem,
 } from '../lib/sync.js';
+import { isConnected } from '../lib/drive.js';
 
 async function init() {
   await migrateFromChromeStorage();
@@ -50,8 +50,7 @@ async function init() {
   setupSyncUI();
 
   // 起動時に自動同期（Drive が設定済みの場合のみ）
-  const syncSettings = await getSyncSettings();
-  if (syncSettings.refreshToken) {
+  if (await isConnected()) {
     runSync();
   }
 }

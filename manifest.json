@@ -5,6 +5,10 @@
   "description": "A simple Markdown editor that runs in a browser tab",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqVm2x7KGaqcFnynH2Xv6Xh6JoBC37a0axD3TDCCbBhvwmPjSukZnJdcMHH3PcN7O6YhQHS8GxIEOHh/BOoIrq9lgQQNER7dVPcwJhoEJMq+F7/lsrUMhXkRKHV38p5e2VTT+IJ2TIXT22n+Cujo5s4yaOdKzxMPTORZ7IB/osov40eYEFuCBz1BhnmE+24T7TSyq7COE47c5Wu8Tu8ijWnCEJel88DrYvDLUZ15PZXy/lZ9uoeVkSjz5b6+m77sBRK1mfEY5UQqI8LfvKb97A6wAA46g+TqyDFTmK4NTE8gmDho1HWAFBvxAnFIkmtigiI/uEjzPM5sLq1cItefgJQIDAQAB",
   "permissions": ["storage", "tabs", "identity"],
+  "oauth2": {
+    "client_id": "140675578103-trv9mk7u31qklabu6gm1q35v1ub7cjth.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+  },
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",

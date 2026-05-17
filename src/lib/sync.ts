@@ -17,6 +17,7 @@ import {
 import {
   uploadDoc, downloadDoc, listRemoteDocs,
   uploadImage, downloadImage, listRemoteImages,
+  isConnected,
 } from './drive.js';
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'conflict';
@@ -60,11 +61,11 @@ export async function syncAll(): Promise<SyncResult> {
   const result: SyncResult = { pushed: 0, pulled: 0, conflicts: [], errors: [] };
 
   try {
-    const syncSettings = await getSyncSettings();
-    if (!syncSettings.refreshToken) {
+    if (!(await isConnected())) {
       setStatus('idle');
       return result;
     }
+    const syncSettings = await getSyncSettings();
 
     // 1. ドキュメントの同期
     const docResult = await syncDocuments(syncSettings);

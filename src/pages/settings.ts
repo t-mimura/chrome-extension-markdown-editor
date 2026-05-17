@@ -1,6 +1,6 @@
 import { getSyncSettings, saveSyncSettings, getSettings } from '../lib/storage.js';
 import { applyTheme, watchSystemTheme } from '../lib/theme.js';
-import { authorize, revokeAuth, resetFolderCache } from '../lib/drive.js';
+import { authorize, revokeAuth, resetFolderCache, isConnected } from '../lib/drive.js';
 
 async function init() {
   const [appSettings, syncSettings] = await Promise.all([getSettings(), getSyncSettings()]);
@@ -19,7 +19,7 @@ async function init() {
   const btnSave = document.getElementById('btn-save')!;
 
   deviceNameInput.value = syncSettings.deviceName;
-  updateAuthStatus(!!syncSettings.refreshToken);
+  updateAuthStatus(await isConnected());
 
   btnSave.addEventListener('click', async () => {
     await saveSyncSettings({ deviceName: deviceNameInput.value.trim() });
