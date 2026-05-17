@@ -13,20 +13,25 @@ async function init() {
 
   const deviceNameInput = document.getElementById('device-name') as HTMLInputElement;
   const deviceNameHint = document.getElementById('device-name-hint')!;
+  const deviceNameWarning = document.getElementById('device-name-warning')!;
   const authStatusEl = document.getElementById('auth-status')!;
   const authStatusText = document.getElementById('auth-status-text')!;
   const btnConnect = document.getElementById('btn-connect')!;
   const btnDisconnect = document.getElementById('btn-disconnect')!;
 
+  const connected = await isConnected();
   deviceNameInput.value = syncSettings.deviceName;
-  updateAuthStatus(await isConnected());
+  updateAuthStatus(connected);
+  updateDeviceNameWarning(connected, syncSettings.deviceName);
 
-  // デバイス名は入力欄からフォーカスが外れた時点で自動保存
+  // デバイス名は入力から 800ms 後に自動保存
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   deviceNameInput.addEventListener('input', () => {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-      await saveSyncSettings({ deviceName: deviceNameInput.value.trim() });
+      const name = deviceNameInput.value.trim();
+      await saveSyncSettings({ deviceName: name });
+      updateDeviceNameWarning(await isConnected(), name);
       deviceNameHint.textContent = '保存しました ✓';
       setTimeout(() => {
         deviceNameHint.textContent = 'コンフリクト発生時に「どのデバイスで編集したか」として表示されます';
@@ -48,6 +53,7 @@ async function init() {
     try {
       await authorize();
       updateAuthStatus(true);
+      updateDeviceNameWarning(true, deviceNameInput.value.trim());
     } catch (e) {
       alert(`接続に失敗しました:\n${e}`);
     } finally {
@@ -62,6 +68,15 @@ async function init() {
     resetFolderCache();
     updateAuthStatus(false);
   });
+
+  function updateDeviceNameWarning(conn: boolean, name: string) {
+    if (conn && !name) {
+      deviceNameWarning.classList.remove('hidden');
+      deviceNameInput.focus();
+    } else {
+      deviceNameWarning.classList.add('hidden');
+    }
+  }
 
   function updateAuthStatus(connected: boolean) {
     if (connected) {

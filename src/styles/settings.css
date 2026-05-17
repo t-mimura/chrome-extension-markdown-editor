@@ -96,6 +96,25 @@
   text-decoration: underline;
 }
 
+.settings-warning {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  color: #92400e;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+:root[data-theme="dark"] .settings-warning {
+  background: #2d1f07;
+  border-color: #d97706;
+  color: #fcd34d;
+}
+
 .setup-guide {
   background: var(--bg-secondary);
   border: 1px solid var(--border);

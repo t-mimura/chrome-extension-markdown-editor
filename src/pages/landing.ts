@@ -5,6 +5,7 @@ import {
   deleteDoc,
   createNewDoc,
   getSettings,
+  getSyncSettings,
   migrateFromChromeStorage,
   type Document,
 } from '../lib/storage.js';
@@ -50,8 +51,28 @@ async function init() {
   setupSyncUI();
 
   // 起動時に自動同期（Drive が設定済みの場合のみ）
-  if (await isConnected()) {
+  const connected = await isConnected();
+  await updateSettingsBadge(connected);
+  if (connected) {
     runSync();
+  }
+}
+
+async function updateSettingsBadge(connected?: boolean) {
+  const badge = document.getElementById('settings-badge');
+  const btnSettings = document.getElementById('btn-settings');
+  if (!badge || !btnSettings) return;
+
+  const isConn = connected ?? await isConnected();
+  const { deviceName } = await getSyncSettings();
+  const hasWarning = isConn && !deviceName;
+
+  if (hasWarning) {
+    badge.classList.remove('hidden');
+    btnSettings.title = '設定 ⚠ デバイス名が未設定です';
+  } else {
+    badge.classList.add('hidden');
+    btnSettings.title = '設定';
   }
 }
 

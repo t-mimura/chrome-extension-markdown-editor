@@ -25,6 +25,7 @@
 }
 
 .btn-settings {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -39,6 +40,17 @@
 .btn-settings:hover {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.settings-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #d97706;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg);
 }
 
 /* コンフリクト解決モーダル */
