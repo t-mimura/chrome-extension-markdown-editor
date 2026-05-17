@@ -61,7 +61,7 @@ export async function syncAll(): Promise<SyncResult> {
 
   try {
     const syncSettings = await getSyncSettings();
-    if (!syncSettings.clientId || !syncSettings.refreshToken) {
+    if (!syncSettings.refreshToken) {
       setStatus('idle');
       return result;
     }

@@ -12,6 +12,7 @@
  */
 
 import { getSyncSettings, saveSyncSettings } from './storage.js';
+import { OAUTH_CLIENT_ID } from './config.js';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
@@ -57,13 +58,13 @@ export function getRedirectUri(): string {
   return chrome.identity.getRedirectURL();
 }
 
-export async function authorize(clientId: string): Promise<void> {
+export async function authorize(): Promise<void> {
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
   const redirectUri = getRedirectUri();
 
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: OAUTH_CLIENT_ID,
     redirect_uri: redirectUri,
     response_type: 'code',
     scope: SCOPES,
@@ -94,7 +95,7 @@ export async function authorize(clientId: string): Promise<void> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: clientId,
+      client_id: OAUTH_CLIENT_ID,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
       code_verifier: verifier,
@@ -125,14 +126,14 @@ async function getAccessToken(): Promise<string> {
     return _cachedToken.token;
   }
 
-  const { clientId, refreshToken } = await getSyncSettings();
-  if (!clientId || !refreshToken) throw new Error('Google Drive が未設定です');
+  const { refreshToken } = await getSyncSettings();
+  if (!refreshToken) throw new Error('Google Drive が未接続です');
 
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: clientId,
+      client_id: OAUTH_CLIENT_ID,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),

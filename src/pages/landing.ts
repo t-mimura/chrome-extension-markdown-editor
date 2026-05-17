@@ -51,7 +51,7 @@ async function init() {
 
   // 起動時に自動同期（Drive が設定済みの場合のみ）
   const syncSettings = await getSyncSettings();
-  if (syncSettings.clientId && syncSettings.refreshToken) {
+  if (syncSettings.refreshToken) {
     runSync();
   }
 }

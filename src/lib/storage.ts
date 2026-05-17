@@ -77,7 +77,6 @@ export async function saveSettings(settings: Settings): Promise<void> {
 
 export type SyncSettings = {
   deviceName: string;
-  clientId: string;
   refreshToken: string | null;
   /** ドキュメント毎の最終同期タイムスタンプ { [docId]: syncedAt } */
   docSyncedAt: Record<string, number>;
@@ -88,7 +87,6 @@ export type SyncSettings = {
 const SYNC_SETTINGS_KEY = 'sync_settings';
 const DEFAULT_SYNC_SETTINGS: SyncSettings = {
   deviceName: '',
-  clientId: '',
   refreshToken: null,
   docSyncedAt: {},
   imageSyncedAt: {},
