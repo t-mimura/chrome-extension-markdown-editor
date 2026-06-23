@@ -204,9 +204,13 @@ async function deleteSelected() {
 
   if (selectedItem.type === 'folder') {
     const name = folderNames.get(selectedItem.id) ?? 'フォルダ';
-    if (!confirm(`フォルダ「${name}」を削除しますか？\n中のドキュメントはルートに移動し、子フォルダはルート直下に移動します。`)) return;
-    if (creationFolderId === selectedItem.id) creationFolderId = null;
-    await deleteFolder(selectedItem.id);
+    if (!confirm(
+      `フォルダ「${name}」を削除しますか？\n配下のフォルダとドキュメントもすべて完全に削除されます。この操作は取り消せません。`,
+    )) return;
+    const deletedFolderIds = await deleteFolder(selectedItem.id);
+    if (creationFolderId && deletedFolderIds.has(creationFolderId)) {
+      creationFolderId = null;
+    }
     scheduleAutoSync();
   } else {
     const doc = await getDoc(selectedItem.id);

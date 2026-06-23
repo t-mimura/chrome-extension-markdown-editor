@@ -221,28 +221,27 @@ function collectDescendantFolderIds(folderId: string, folders: FolderRecord[]): 
   return ids;
 }
 
-export async function deleteFolder(id: string): Promise<void> {
+export async function deleteFolder(id: string): Promise<Set<string>> {
   const folders = await dbGetAllFolders();
   const folder = folders.find((f) => f.id === id);
-  if (!folder) return;
+  if (!folder) return new Set();
 
-  const now = Date.now();
   const descendants = collectDescendantFolderIds(id, folders);
-  for (const f of folders) {
-    if (descendants.has(f.id)) {
-      await dbSaveFolder({ ...f, parentId: null, updatedAt: now });
-    }
-  }
+  const folderIdsToDelete = new Set([id, ...descendants]);
 
   const docs = await dbGetAllDocs();
   for (const doc of docs) {
-    if (doc.folderId === id) {
-      await dbSaveDoc({ ...doc, folderId: null, updatedAt: now });
+    if (doc.folderId && folderIdsToDelete.has(doc.folderId)) {
+      await dbDeleteDoc(doc.id);
     }
   }
 
-  await dbDeleteFolder(id);
+  for (const folderId of folderIdsToDelete) {
+    await dbDeleteFolder(folderId);
+  }
+
   await bumpFoldersRevision();
+  return folderIdsToDelete;
 }
 
 export async function moveFolder(id: string, newParentId: string | null): Promise<void> {
