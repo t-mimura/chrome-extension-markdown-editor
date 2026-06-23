@@ -16,7 +16,17 @@
       </div>
       <div class="toolbar-right">
         <div id="sync-status" class="sync-status sync-idle" title="同期状態"></div>
-        <button id="btn-toggle-preview" title="プレビューを非表示" aria-label="プレビューを非表示"></button>
+        <div class="view-mode-segment" role="group" aria-label="表示モード">
+          <button type="button" class="segment-btn" data-mode="editor" aria-pressed="false" title="エディタのみ" aria-label="エディタのみ">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h400l200 200v400q0 33-23.5 56.5T720-120H200Zm0-80h400v-160H200v240Zm80-240h160v-80H280v80Zm400 0v-360L640-760H200v200h80v-80h240v80h160Z"/></svg>
+          </button>
+          <button type="button" class="segment-btn segment-active" data-mode="split" aria-pressed="true" title="エディタとプレビュー" aria-label="エディタとプレビュー">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true"><path d="M600-120q-33 0-56.5-23.5T520-200v-560q0-33 23.5-56.5T600-840h160q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H600Zm0-640v560h160v-560H600ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h160q33 0 56.5 23.5T440-760v560q0 33-23.5 56.5T360-120H200Zm0-640v560h160v-560H200Zm560 0H600h160Zm-400 0H200h160Z"/></svg>
+          </button>
+          <button type="button" class="segment-btn" data-mode="preview" aria-pressed="false" title="プレビューのみ" aria-label="プレビューのみ">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640H240v640Zm80-200h320v-80H320v80Zm0 160h240v-80H320v80Z"/></svg>
+          </button>
+        </div>
         <button id="btn-insert-image" title="画像を挿入" aria-label="画像を挿入">
           <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true"><path d="M480-480ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h320v80H200v560h560v-320h80v320q0 33-23.5 56.5T760-120H200Zm40-160h480L570-480 450-320l-90-120-120 160Zm440-320v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80Z"/></svg>
         </button>

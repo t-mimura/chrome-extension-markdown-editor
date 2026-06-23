@@ -23,11 +23,24 @@ export type DriveDocMeta = {
   updatedAt: number;
   charCount: number;
   deviceName: string;
+  folderId?: string | null;
 };
 
 export type DriveDoc = DriveDocMeta & {
   id: string;
   content: string;
+};
+
+export type FoldersSnapshot = {
+  version: 1;
+  updatedAt: number;
+  folders: {
+    id: string;
+    name: string;
+    parentId: string | null;
+    order: number;
+    updatedAt: number;
+  }[];
 };
 
 // ── 認証 ─────────────────────────────────────────────────────────────
@@ -164,6 +177,7 @@ export async function uploadDoc(doc: DriveDoc): Promise<void> {
     updatedAt: doc.updatedAt,
     charCount: doc.content.length,
     deviceName: (await getSyncSettings()).deviceName,
+    folderId: doc.folderId ?? null,
   });
 
   const existing = await findFileInFolder(folders.documents, fileName);
@@ -205,6 +219,40 @@ export async function listRemoteDocs(): Promise<{ driveFileId: string; docId: st
     });
   }
   return results;
+}
+
+// ── フォルダ一覧 ──────────────────────────────────────────────────────
+
+const FOLDERS_FILE = 'folders.json';
+
+export async function uploadFolders(snapshot: FoldersSnapshot): Promise<void> {
+  const folders = await getFolderIds();
+  const body = JSON.stringify(snapshot);
+  const existing = await findFileInFolder(folders.root, FOLDERS_FILE);
+
+  if (existing) {
+    await apiFetch(`${UPLOAD_API}/files/${existing}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+  } else {
+    const meta = JSON.stringify({ name: FOLDERS_FILE, parents: [folders.root] });
+    const form = buildMultipart(meta, body, 'application/json');
+    await apiFetch(`${UPLOAD_API}/files?uploadType=multipart`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${form.boundary}` },
+      body: form.body,
+    });
+  }
+}
+
+export async function downloadFolders(): Promise<FoldersSnapshot | null> {
+  const folders = await getFolderIds();
+  const fileId = await findFileInFolder(folders.root, FOLDERS_FILE);
+  if (!fileId) return null;
+  const res = await apiFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
+  return res.json() as Promise<FoldersSnapshot>;
 }
 
 // ── 画像操作 ──────────────────────────────────────────────────────────

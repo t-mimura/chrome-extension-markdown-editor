@@ -1,8 +1,11 @@
 import {
   dbGetAllDocs, dbGetDoc, dbSaveDoc, dbDeleteDoc,
+  dbGetAllFolders, dbGetFolder, dbSaveFolder, dbDeleteFolder,
   dbSaveImage, dbGetImage, dbDeleteImage, dbGetAllImageIds, dbGetAllImages,
-  type DocRecord, type ImageRecord,
+  type DocRecord, type FolderRecord, type ImageRecord,
 } from './db.js';
+
+export type { FolderRecord };
 
 // ── 型エクスポート（後方互換） ────────────────────────────────────────
 
@@ -11,10 +14,12 @@ export type { ImageRecord };
 
 export type FontSize = 12 | 14 | 16 | 18 | 20;
 export type Theme = 'light' | 'dark' | 'system';
+export type ViewMode = 'editor' | 'split' | 'preview';
 
 export type Settings = {
   fontSize: FontSize;
   theme: Theme;
+  viewMode: ViewMode;
 };
 
 // ── ユーティリティ ────────────────────────────────────────────────────
@@ -24,8 +29,8 @@ export function getDocTitle(content: string): string {
   return firstLine.replace(/^#+\s*/, '') || '無題';
 }
 
-export function createNewDoc(): Document {
-  return { id: crypto.randomUUID(), content: '', updatedAt: Date.now() };
+export function createNewDoc(folderId: string | null = null): Document {
+  return { id: crypto.randomUUID(), content: '', updatedAt: Date.now(), folderId };
 }
 
 // ── Documents (IndexedDB) ─────────────────────────────────────────────
@@ -62,7 +67,7 @@ export async function deleteOrphanedImages(): Promise<void> {
 // ── Settings (chrome.storage.local のまま維持) ────────────────────────
 
 const SETTINGS_KEY = 'settings';
-const DEFAULT_SETTINGS: Settings = { fontSize: 16, theme: 'system' };
+const DEFAULT_SETTINGS: Settings = { fontSize: 16, theme: 'system', viewMode: 'split' };
 
 export async function getSettings(): Promise<Settings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -81,6 +86,10 @@ export type SyncSettings = {
   docSyncedAt: Record<string, number>;
   /** 画像の最終同期タイムスタンプ { [imageId]: syncedAt } */
   imageSyncedAt: Record<string, number>;
+  /** folders.json の最終同期タイムスタンプ */
+  foldersSyncedAt: number;
+  /** フォルダ構成が変わった時刻（空の状態でも push するため） */
+  foldersRevision: number;
 };
 
 const SYNC_SETTINGS_KEY = 'sync_settings';
@@ -88,6 +97,8 @@ const DEFAULT_SYNC_SETTINGS: SyncSettings = {
   deviceName: '',
   docSyncedAt: {},
   imageSyncedAt: {},
+  foldersSyncedAt: 0,
+  foldersRevision: 0,
 };
 
 export async function getSyncSettings(): Promise<SyncSettings> {
@@ -118,4 +129,180 @@ export async function migrateFromChromeStorage(): Promise<void> {
   }
 
   await chrome.storage.local.set({ [MIGRATION_KEY]: true });
+}
+
+// ── Folders (IndexedDB) ───────────────────────────────────────────────
+
+export type FolderTreeNode = {
+  folder: FolderRecord;
+  children: FolderTreeNode[];
+  docs: DocRecord[];
+};
+
+export const getAllFolders = dbGetAllFolders;
+export const getFolder = dbGetFolder;
+
+export function getFoldersSnapshotUpdatedAt(folders: FolderRecord[]): number {
+  if (folders.length === 0) return 0;
+  return Math.max(...folders.map((f) => f.updatedAt));
+}
+
+async function bumpFoldersRevision(): Promise<void> {
+  await saveSyncSettings({ foldersRevision: Date.now() });
+}
+
+export async function createFolder(name: string, parentId: string | null = null): Promise<FolderRecord> {
+  if (parentId) {
+    const parent = await dbGetFolder(parentId);
+    if (!parent) throw new Error('親フォルダが見つかりません');
+  }
+  const siblings = (await dbGetAllFolders()).filter((f) => f.parentId === parentId);
+  const folder: FolderRecord = {
+    id: crypto.randomUUID(),
+    name: name.trim() || '新しいフォルダ',
+    parentId,
+    order: siblings.length,
+    updatedAt: Date.now(),
+  };
+  await dbSaveFolder(folder);
+  await bumpFoldersRevision();
+  return folder;
+}
+
+export async function renameFolder(id: string, name: string): Promise<void> {
+  const folder = await dbGetFolder(id);
+  if (!folder) throw new Error('フォルダが見つかりません');
+  await dbSaveFolder({ ...folder, name: name.trim() || folder.name, updatedAt: Date.now() });
+  await bumpFoldersRevision();
+}
+
+function collectDescendantFolderIds(folderId: string, folders: FolderRecord[]): Set<string> {
+  const ids = new Set<string>();
+  const walk = (id: string) => {
+    for (const f of folders) {
+      if (f.parentId === id && !ids.has(f.id)) {
+        ids.add(f.id);
+        walk(f.id);
+      }
+    }
+  };
+  walk(folderId);
+  return ids;
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  const folders = await dbGetAllFolders();
+  const folder = folders.find((f) => f.id === id);
+  if (!folder) return;
+
+  const now = Date.now();
+  for (const f of folders) {
+    if (f.parentId === id) {
+      await dbSaveFolder({ ...f, parentId: null, updatedAt: now });
+    }
+  }
+
+  const docs = await dbGetAllDocs();
+  for (const doc of docs) {
+    if (doc.folderId === id) {
+      await dbSaveDoc({ ...doc, folderId: null, updatedAt: now });
+    }
+  }
+
+  await dbDeleteFolder(id);
+  await bumpFoldersRevision();
+}
+
+export async function moveFolder(id: string, newParentId: string | null): Promise<void> {
+  if (id === newParentId) throw new Error('自分自身には移動できません');
+  const folders = await dbGetAllFolders();
+  const folder = folders.find((f) => f.id === id);
+  if (!folder) throw new Error('フォルダが見つかりません');
+
+  if (newParentId) {
+    const parent = folders.find((f) => f.id === newParentId);
+    if (!parent) throw new Error('移動先フォルダが見つかりません');
+    const descendants = collectDescendantFolderIds(id, folders);
+    if (newParentId === id || descendants.has(newParentId)) {
+      throw new Error('子フォルダの中には移動できません');
+    }
+  }
+
+  const siblings = folders.filter((f) => f.parentId === newParentId && f.id !== id);
+  await dbSaveFolder({
+    ...folder,
+    parentId: newParentId,
+    order: siblings.length,
+    updatedAt: Date.now(),
+  });
+  await bumpFoldersRevision();
+}
+
+export async function moveDoc(docId: string, folderId: string | null): Promise<void> {
+  const doc = await dbGetDoc(docId);
+  if (!doc) throw new Error('ドキュメントが見つかりません');
+  if (folderId) {
+    const folder = await dbGetFolder(folderId);
+    if (!folder) throw new Error('フォルダが見つかりません');
+  }
+  await dbSaveDoc({ ...doc, folderId, updatedAt: Date.now() });
+}
+
+export async function resolveFolderId(folderId: string | null | undefined): Promise<string | null> {
+  if (!folderId) return null;
+  const folder = await dbGetFolder(folderId);
+  return folder ? folderId : null;
+}
+
+/** 存在しない folderId を持つドキュメントをルートへ移す */
+export async function repairOrphanFolderRefs(): Promise<number> {
+  const [folders, docs] = await Promise.all([dbGetAllFolders(), dbGetAllDocs()]);
+  const validIds = new Set(folders.map((f) => f.id));
+  let repaired = 0;
+  const now = Date.now();
+  for (const doc of docs) {
+    if (doc.folderId && !validIds.has(doc.folderId)) {
+      await dbSaveDoc({ ...doc, folderId: null, updatedAt: now });
+      repaired++;
+    }
+  }
+  return repaired;
+}
+
+export async function replaceAllFolders(folders: FolderRecord[]): Promise<void> {
+  const existing = await dbGetAllFolders();
+  const incomingIds = new Set(folders.map((f) => f.id));
+  for (const f of existing) {
+    if (!incomingIds.has(f.id)) await dbDeleteFolder(f.id);
+  }
+  for (const f of folders) {
+    await dbSaveFolder(f);
+  }
+}
+
+export async function getFolderTree(): Promise<{ roots: FolderTreeNode[]; rootDocs: DocRecord[] }> {
+  const [folders, docs] = await Promise.all([dbGetAllFolders(), dbGetAllDocs()]);
+  const validFolderIds = new Set(folders.map((f) => f.id));
+
+  const normalizedDocs = docs.map((d) => ({
+    ...d,
+    folderId: d.folderId && validFolderIds.has(d.folderId) ? d.folderId : null,
+  }));
+
+  const sortFolders = (list: FolderRecord[]) =>
+    [...list].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'ja'));
+
+  const sortDocs = (list: DocRecord[]) =>
+    [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  const buildNode = (folder: FolderRecord): FolderTreeNode => ({
+    folder,
+    children: sortFolders(folders.filter((f) => f.parentId === folder.id)).map(buildNode),
+    docs: sortDocs(normalizedDocs.filter((d) => d.folderId === folder.id)),
+  });
+
+  const roots = sortFolders(folders.filter((f) => f.parentId === null)).map(buildNode);
+  const rootDocs = sortDocs(normalizedDocs.filter((d) => !d.folderId));
+
+  return { roots, rootDocs };
 }

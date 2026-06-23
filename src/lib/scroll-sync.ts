@@ -24,14 +24,24 @@ export class ScrollSync {
 
   onEditorScroll(): void {
     if (this.lockSide === 'preview') return;
+    if (!this.isSplitMode()) return;
     this.lock('editor');
     this.syncToPreview();
   }
 
   onPreviewScroll(): void {
     if (this.lockSide === 'editor') return;
+    if (!this.isSplitMode()) return;
     this.lock('preview');
     this.syncToEditor();
+  }
+
+  private isSplitMode(): boolean {
+    const editorPane = document.getElementById('editor-pane');
+    const previewPane = document.getElementById('preview-pane');
+    return !!editorPane && !!previewPane
+      && !editorPane.classList.contains('hidden')
+      && !previewPane.classList.contains('hidden');
   }
 
   private lock(side: 'editor' | 'preview') {

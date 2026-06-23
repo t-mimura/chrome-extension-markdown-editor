@@ -17,6 +17,7 @@ import {
   type Document,
   type FontSize,
   type Theme,
+  type ViewMode,
 } from '../lib/storage.js';
 import { registerTab, setTabDoc, broadcastSettingsChanged } from '../lib/messaging.js';
 import { applyTheme, watchSystemTheme } from '../lib/theme.js';
@@ -29,23 +30,11 @@ let currentDoc: Document | null = null;
 let editorView: EditorView | null = null;
 let scrollSync: ScrollSync | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let previewVisible = true;
+let viewMode: ViewMode = 'split';
 let stopWatchSystem: (() => void) | null = null;
-let currentSettings = { fontSize: 16 as FontSize, theme: 'system' as Theme };
+let currentSettings = { fontSize: 16 as FontSize, theme: 'system' as Theme, viewMode: 'split' as ViewMode };
 
 const SAVE_DEBOUNCE_MS = 400;
-
-// 2ペイン表示アイコン: Material Symbols / view_column_2
-const ICON_SPLIT =
-  `<svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true">` +
-  `<path d="M600-120q-33 0-56.5-23.5T520-200v-560q0-33 23.5-56.5T600-840h160q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H600Zm0-640v560h160v-560H600ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h160q33 0 56.5 23.5T440-760v560q0 33-23.5 56.5T360-120H200Zm0-640v560h160v-560H200Zm560 0H600h160Zm-400 0H200h160Z"/>` +
-  `</svg>`;
-
-// 1ペイン表示アイコン: Material Symbols / crop_landscape
-const ICON_SINGLE =
-  `<svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 -960 960 960" width="18" fill="currentColor" aria-hidden="true">` +
-  `<path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-480H160v480Zm0 0v-480 480Z"/>` +
-  `</svg>`;
 
 async function init() {
   await migrateFromChromeStorage();
@@ -56,6 +45,7 @@ async function init() {
 
   const settings = await getSettings();
   currentSettings = { ...settings };
+  viewMode = settings.viewMode;
   applyFontSize(settings.fontSize);
   applyTheme(settings.theme);
   stopWatchSystem = watchSystemTheme(settings.theme, (resolved) => {
@@ -70,8 +60,11 @@ async function init() {
 
   if (docId) {
     if (isNew) {
-      currentDoc = { ...createNewDoc(), id: docId };
-      await saveDoc(currentDoc);
+      currentDoc = await getDoc(docId);
+      if (!currentDoc) {
+        currentDoc = { ...createNewDoc(), id: docId };
+        await saveDoc(currentDoc);
+      }
     } else {
       currentDoc = await getDoc(docId);
     }
@@ -96,16 +89,20 @@ async function init() {
   await renderPreview(currentDoc.content);
   setupSplitter();
   setupToolbar();
+  applyViewMode(viewMode);
   setupHelpModal();
   setupImageDrop();
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SETTINGS_CHANGED') {
       currentSettings = { ...msg.settings };
+      viewMode = msg.settings.viewMode;
       applyFontSize(msg.settings.fontSize);
       applyTheme(msg.settings.theme);
+      applyViewMode(viewMode);
       (document.getElementById('font-size-select') as HTMLSelectElement).value = String(msg.settings.fontSize);
       (document.getElementById('theme-select') as HTMLSelectElement).value = msg.settings.theme;
+      applyViewMode(msg.settings.viewMode);
       stopWatchSystem?.();
       stopWatchSystem = watchSystemTheme(msg.settings.theme, (resolved) => {
         document.documentElement.setAttribute('data-theme', resolved);
@@ -208,6 +205,45 @@ function applyFontSize(size: FontSize) {
   document.documentElement.style.setProperty('--font-size', `${size}px`);
 }
 
+function applyViewMode(mode: ViewMode) {
+  viewMode = mode;
+  const previewPane = document.getElementById('preview-pane')!;
+  const splitterEl = document.getElementById('splitter')!;
+  const editorPane = document.getElementById('editor-pane')!;
+  const btnImage = document.getElementById('btn-insert-image') as HTMLButtonElement | null;
+
+  const showEditor = mode === 'editor' || mode === 'split';
+  const showPreview = mode === 'preview' || mode === 'split';
+  const showSplitter = mode === 'split';
+
+  editorPane.classList.toggle('hidden', !showEditor);
+  previewPane.classList.toggle('hidden', !showPreview);
+  splitterEl.classList.toggle('hidden', !showSplitter);
+
+  if (mode === 'editor') {
+    editorPane.style.flex = '1';
+  } else if (mode === 'preview') {
+    previewPane.style.flex = '1';
+    editorPane.style.flex = '';
+  } else {
+    editorPane.style.flex = '';
+    previewPane.style.flex = '';
+  }
+
+  if (btnImage) {
+    btnImage.disabled = mode === 'preview';
+    btnImage.title = mode === 'preview' ? 'プレビューモードでは画像を挿入できません' : '画像を挿入';
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.segment-btn').forEach((btn) => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('segment-active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+
+  editorView?.requestMeasure();
+}
+
 function setupSplitter() {
   const splitter = document.getElementById('splitter')!;
   const editorPane = document.getElementById('editor-pane')!;
@@ -248,19 +284,10 @@ function setupSplitter() {
   });
 }
 
-function setPreviewButtonIcon(btn: HTMLElement, showing: boolean) {
-  btn.innerHTML = showing ? ICON_SPLIT : ICON_SINGLE;
-  btn.title = showing ? 'プレビューを非表示' : 'プレビューを表示';
-  btn.setAttribute('aria-label', btn.title);
-}
-
 function setupToolbar() {
   const fontSizeSelect = document.getElementById('font-size-select') as HTMLSelectElement;
   const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
-  const btnTogglePreview = document.getElementById('btn-toggle-preview')!;
   const syncStatusEl = document.getElementById('sync-status');
-
-  setPreviewButtonIcon(btnTogglePreview, true);
 
   if (syncStatusEl) {
     const labels: Record<string, string> = {
@@ -296,23 +323,15 @@ function setupToolbar() {
     await broadcastSettingsChanged({ ...currentSettings }).catch(() => {});
   });
 
-  btnTogglePreview.addEventListener('click', () => {
-    previewVisible = !previewVisible;
-    const previewPane = document.getElementById('preview-pane')!;
-    const splitterEl = document.getElementById('splitter')!;
-    const editorPane = document.getElementById('editor-pane')!;
-
-    if (previewVisible) {
-      previewPane.classList.remove('hidden');
-      splitterEl.classList.remove('hidden');
-      editorPane.style.flex = '';
-    } else {
-      previewPane.classList.add('hidden');
-      splitterEl.classList.add('hidden');
-      editorPane.style.flex = '1';
-    }
-    setPreviewButtonIcon(btnTogglePreview, previewVisible);
-    editorView?.requestMeasure();
+  document.querySelectorAll<HTMLButtonElement>('.segment-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const mode = btn.dataset.mode as ViewMode;
+      if (!mode || mode === viewMode) return;
+      currentSettings.viewMode = mode;
+      applyViewMode(mode);
+      await saveSettings({ ...currentSettings });
+      await broadcastSettingsChanged({ ...currentSettings }).catch(() => {});
+    });
   });
 }
 
