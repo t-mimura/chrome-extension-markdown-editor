@@ -99,7 +99,6 @@ async function init() {
       viewMode = msg.settings.viewMode;
       applyFontSize(msg.settings.fontSize);
       applyTheme(msg.settings.theme);
-      applyViewMode(viewMode);
       (document.getElementById('font-size-select') as HTMLSelectElement).value = String(msg.settings.fontSize);
       (document.getElementById('theme-select') as HTMLSelectElement).value = msg.settings.theme;
       applyViewMode(msg.settings.viewMode);

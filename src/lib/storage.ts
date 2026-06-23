@@ -142,6 +142,24 @@ export type FolderTreeNode = {
 export const getAllFolders = dbGetAllFolders;
 export const getFolder = dbGetFolder;
 
+function normalizeFolderName(name: string): string {
+  return name.trim();
+}
+
+function hasSiblingFolderName(
+  folders: FolderRecord[],
+  parentId: string | null,
+  name: string,
+  excludeId?: string,
+): boolean {
+  const normalized = normalizeFolderName(name).toLocaleLowerCase('ja');
+  if (!normalized) return false;
+  return folders.some((f) =>
+    f.parentId === parentId
+    && f.id !== excludeId
+    && normalizeFolderName(f.name).toLocaleLowerCase('ja') === normalized);
+}
+
 export function getFoldersSnapshotUpdatedAt(folders: FolderRecord[]): number {
   if (folders.length === 0) return 0;
   return Math.max(...folders.map((f) => f.updatedAt));
@@ -152,14 +170,22 @@ async function bumpFoldersRevision(): Promise<void> {
 }
 
 export async function createFolder(name: string, parentId: string | null = null): Promise<FolderRecord> {
+  const normalizedName = normalizeFolderName(name) || '新しいフォルダ';
+  const allFolders = await dbGetAllFolders();
+
   if (parentId) {
-    const parent = await dbGetFolder(parentId);
+    const parent = allFolders.find((f) => f.id === parentId);
     if (!parent) throw new Error('親フォルダが見つかりません');
   }
-  const siblings = (await dbGetAllFolders()).filter((f) => f.parentId === parentId);
+
+  if (hasSiblingFolderName(allFolders, parentId, normalizedName)) {
+    throw new Error('同じ階層に同名のフォルダがあります');
+  }
+
+  const siblings = allFolders.filter((f) => f.parentId === parentId);
   const folder: FolderRecord = {
     id: crypto.randomUUID(),
-    name: name.trim() || '新しいフォルダ',
+    name: normalizedName,
     parentId,
     order: siblings.length,
     updatedAt: Date.now(),
@@ -170,9 +196,14 @@ export async function createFolder(name: string, parentId: string | null = null)
 }
 
 export async function renameFolder(id: string, name: string): Promise<void> {
-  const folder = await dbGetFolder(id);
+  const allFolders = await dbGetAllFolders();
+  const folder = allFolders.find((f) => f.id === id);
   if (!folder) throw new Error('フォルダが見つかりません');
-  await dbSaveFolder({ ...folder, name: name.trim() || folder.name, updatedAt: Date.now() });
+  const normalizedName = normalizeFolderName(name) || folder.name;
+  if (hasSiblingFolderName(allFolders, folder.parentId, normalizedName, folder.id)) {
+    throw new Error('同じ階層に同名のフォルダがあります');
+  }
+  await dbSaveFolder({ ...folder, name: normalizedName, updatedAt: Date.now() });
   await bumpFoldersRevision();
 }
 
@@ -196,8 +227,9 @@ export async function deleteFolder(id: string): Promise<void> {
   if (!folder) return;
 
   const now = Date.now();
+  const descendants = collectDescendantFolderIds(id, folders);
   for (const f of folders) {
-    if (f.parentId === id) {
+    if (descendants.has(f.id)) {
       await dbSaveFolder({ ...f, parentId: null, updatedAt: now });
     }
   }
