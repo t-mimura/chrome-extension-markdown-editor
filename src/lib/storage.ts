@@ -260,6 +260,11 @@ export async function moveFolder(id: string, newParentId: string | null): Promis
     }
   }
 
+  const normalizedName = normalizeFolderName(folder.name);
+  if (hasSiblingFolderName(folders, newParentId, normalizedName, folder.id)) {
+    throw new Error('移動先に同名のフォルダがあります');
+  }
+
   const siblings = folders.filter((f) => f.parentId === newParentId && f.id !== id);
   await dbSaveFolder({
     ...folder,
@@ -286,19 +291,41 @@ export async function resolveFolderId(folderId: string | null | undefined): Prom
   return folder ? folderId : null;
 }
 
-/** 存在しない folderId を持つドキュメントをルートへ移す */
-export async function repairOrphanFolderRefs(): Promise<number> {
+export function foldersSnapshotKey(folders: FolderRecord[]): string {
+  return JSON.stringify(
+    [...folders]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((f) => ({ id: f.id, name: f.name, parentId: f.parentId, order: f.order })),
+  );
+}
+
+/** 存在しない親フォルダ・folderId 参照をルートへ修復 */
+export async function repairOrphanFolderRefs(): Promise<{ docs: number; folders: number }> {
   const [folders, docs] = await Promise.all([dbGetAllFolders(), dbGetAllDocs()]);
   const validIds = new Set(folders.map((f) => f.id));
-  let repaired = 0;
+  let repairedDocs = 0;
+  let repairedFolders = 0;
   const now = Date.now();
+
+  for (const folder of folders) {
+    if (folder.parentId && !validIds.has(folder.parentId)) {
+      await dbSaveFolder({ ...folder, parentId: null, updatedAt: now });
+      repairedFolders++;
+    }
+  }
+
   for (const doc of docs) {
     if (doc.folderId && !validIds.has(doc.folderId)) {
       await dbSaveDoc({ ...doc, folderId: null, updatedAt: now });
-      repaired++;
+      repairedDocs++;
     }
   }
-  return repaired;
+
+  if (repairedFolders > 0) {
+    await bumpFoldersRevision();
+  }
+
+  return { docs: repairedDocs, folders: repairedFolders };
 }
 
 export async function replaceAllFolders(folders: FolderRecord[]): Promise<void> {
@@ -327,14 +354,30 @@ export async function getFolderTree(): Promise<{ roots: FolderTreeNode[]; rootDo
   const sortDocs = (list: DocRecord[]) =>
     [...list].sort((a, b) => b.updatedAt - a.updatedAt);
 
+  const childrenByParent = new Map<string | null, FolderRecord[]>();
+  for (const folder of folders) {
+    const parentKey = folder.parentId;
+    const bucket = childrenByParent.get(parentKey);
+    if (bucket) bucket.push(folder);
+    else childrenByParent.set(parentKey, [folder]);
+  }
+
+  const docsByFolder = new Map<string | null, DocRecord[]>();
+  for (const doc of normalizedDocs) {
+    const folderKey = doc.folderId ?? null;
+    const bucket = docsByFolder.get(folderKey);
+    if (bucket) bucket.push(doc);
+    else docsByFolder.set(folderKey, [doc]);
+  }
+
   const buildNode = (folder: FolderRecord): FolderTreeNode => ({
     folder,
-    children: sortFolders(folders.filter((f) => f.parentId === folder.id)).map(buildNode),
-    docs: sortDocs(normalizedDocs.filter((d) => d.folderId === folder.id)),
+    children: sortFolders(childrenByParent.get(folder.id) ?? []).map(buildNode),
+    docs: sortDocs(docsByFolder.get(folder.id) ?? []),
   });
 
-  const roots = sortFolders(folders.filter((f) => f.parentId === null)).map(buildNode);
-  const rootDocs = sortDocs(normalizedDocs.filter((d) => !d.folderId));
+  const roots = sortFolders(childrenByParent.get(null) ?? []).map(buildNode);
+  const rootDocs = sortDocs(docsByFolder.get(null) ?? []);
 
   return { roots, rootDocs };
 }

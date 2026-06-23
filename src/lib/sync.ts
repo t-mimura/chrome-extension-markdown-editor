@@ -12,7 +12,7 @@ import {
   getAllDocs, getDoc, saveDoc, deleteOrphanedImages,
   getSyncSettings, saveSyncSettings,
   getAllImages, saveImage,
-  getAllFolders, replaceAllFolders, getFoldersSnapshotUpdatedAt,
+  getAllFolders, replaceAllFolders, getFoldersSnapshotUpdatedAt, foldersSnapshotKey,
   repairOrphanFolderRefs,
   type SyncSettings,
 } from './storage.js';
@@ -28,8 +28,15 @@ export type SyncStatus = 'idle' | 'syncing' | 'error' | 'conflict';
 
 export type ConflictItem = {
   docId: string;
-  local: { content: string; updatedAt: number; charCount: number };
-  remote: { content: string; updatedAt: number; charCount: number; deviceName: string; driveFileId: string };
+  local: { content: string; updatedAt: number; charCount: number; folderId: string | null };
+  remote: {
+    content: string;
+    updatedAt: number;
+    charCount: number;
+    deviceName: string;
+    driveFileId: string;
+    folderId: string | null;
+  };
 };
 
 type SyncResult = {
@@ -75,24 +82,24 @@ export async function syncAll(): Promise<SyncResult> {
     const folderResult = await syncFolders(syncSettings);
     result.errors.push(...folderResult.errors);
 
-    // 2. ドキュメントの同期
+    // 2. 孤立フォルダ参照の修復（ドキュメント同期前に実施し、修正を同パスで push 可能にする）
+    await repairOrphanFolderRefs();
+
+    // 3. ドキュメントの同期
     const docResult = await syncDocuments(syncSettings);
     result.pushed += docResult.pushed;
     result.pulled += docResult.pulled;
     result.conflicts.push(...docResult.conflicts);
     result.errors.push(...docResult.errors);
 
-    // 3. 画像の同期（ドキュメントで参照されているものを対象）
+    // 4. 画像の同期（ドキュメントで参照されているものを対象）
     const imgResult = await syncImages(syncSettings);
     result.pushed += imgResult.pushed;
     result.pulled += imgResult.pulled;
     result.errors.push(...imgResult.errors);
 
-    // 4. 孤立画像のクリーンアップ
+    // 5. 孤立画像のクリーンアップ
     await deleteOrphanedImages();
-
-    // 5. 存在しないフォルダを参照するドキュメントを修復
-    await repairOrphanFolderRefs();
 
     setStatus(result.conflicts.length > 0 ? 'conflict' : 'idle');
   } catch (e) {
@@ -120,14 +127,22 @@ async function syncFolders(syncSettings: SyncSettings) {
     const localChanged = localUpdatedAt > lastSynced;
     const remoteChanged = remoteUpdatedAt > lastSynced;
 
-    if (localChanged && remoteChanged && localUpdatedAt !== remoteUpdatedAt) {
-      // last-write-wins
-      if (remoteUpdatedAt > localUpdatedAt && remote) {
+    if (localChanged && remoteChanged) {
+      if (localUpdatedAt !== remoteUpdatedAt) {
+        if (remoteUpdatedAt > localUpdatedAt && remote) {
+          await replaceAllFolders(remote.folders);
+          await saveSyncSettings({ foldersSyncedAt: Date.now(), foldersRevision: remoteUpdatedAt });
+        } else {
+          await pushFoldersSnapshot(localFolders, localUpdatedAt);
+          await saveSyncSettings({ foldersSyncedAt: Date.now(), foldersRevision: localUpdatedAt });
+        }
+      } else if (
+        remote
+        && foldersSnapshotKey(localFolders) !== foldersSnapshotKey(remote.folders)
+      ) {
+        // updatedAt が同値でも内容が異なる場合はリモートを優先
         await replaceAllFolders(remote.folders);
         await saveSyncSettings({ foldersSyncedAt: Date.now(), foldersRevision: remoteUpdatedAt });
-      } else {
-        await pushFoldersSnapshot(localFolders, localUpdatedAt);
-        await saveSyncSettings({ foldersSyncedAt: Date.now(), foldersRevision: localUpdatedAt });
       }
     } else if (localChanged && localUpdatedAt > remoteUpdatedAt) {
       await pushFoldersSnapshot(localFolders, localUpdatedAt);
@@ -201,8 +216,20 @@ async function syncDocuments(syncSettings: SyncSettings) {
       if (remoteDoc) {
         result.conflicts.push({
           docId: local.id,
-          local: { content: local.content, updatedAt: local.updatedAt, charCount: local.content.length },
-          remote: { content: remoteDoc.content, updatedAt: remote.updatedAt, charCount: remote.charCount, deviceName: remote.deviceName, driveFileId: remote.driveFileId },
+          local: {
+            content: local.content,
+            updatedAt: local.updatedAt,
+            charCount: local.content.length,
+            folderId: local.folderId ?? null,
+          },
+          remote: {
+            content: remoteDoc.content,
+            updatedAt: remoteDoc.updatedAt,
+            charCount: remoteDoc.charCount,
+            deviceName: remoteDoc.deviceName,
+            driveFileId: remote.driveFileId,
+            folderId: remoteDoc.folderId ?? null,
+          },
         });
       }
     } else if (localNewer) {
@@ -310,7 +337,13 @@ export async function resolveConflict(
   const syncSettings = await getSyncSettings();
 
   if (choice === 'remote') {
-    await saveDoc({ id: conflict.docId, content: conflict.remote.content, updatedAt: conflict.remote.updatedAt });
+    const existing = await getDoc(conflict.docId);
+    await saveDoc({
+      id: conflict.docId,
+      content: conflict.remote.content,
+      updatedAt: conflict.remote.updatedAt,
+      folderId: conflict.remote.folderId ?? existing?.folderId ?? null,
+    });
   }
   // local を選んだ場合: Drive に push
   if (choice === 'local') {

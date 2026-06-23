@@ -275,6 +275,7 @@ function triggerRenameSelected() {
     }
 
     await saveDoc({ ...currentDoc, content: newContent, updatedAt: Date.now() });
+    scheduleAutoSync();
     await renderDocTree();
   });
   titleEl.replaceWith(input);
@@ -480,9 +481,14 @@ function startInlineRename(
     if (finished) return;
     finished = true;
     const newName = input.value.trim();
-    if (save && newName && newName !== currentName) {
-      await onSave(newName);
-    } else {
+    try {
+      if (save && newName && newName !== currentName) {
+        await onSave(newName);
+      } else {
+        await renderDocTree();
+      }
+    } catch (err) {
+      showToast(String(err));
       await renderDocTree();
     }
   };
