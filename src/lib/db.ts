@@ -1,18 +1,28 @@
 /**
  * IndexedDB ラッパー
  *
- * DB名: markdown-editor / バージョン: 1
+ * DB名: markdown-editor / バージョン: 2
  * ストア:
- *   documents  — { id, content, updatedAt }
+ *   documents  — { id, content, updatedAt, folderId? }
+ *   folders    — { id, name, parentId, order, updatedAt }
  *   images     — { id, mimeType, data: ArrayBuffer, size, createdAt }
  */
 
 const DB_NAME = 'markdown-editor';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export type DocRecord = {
   id: string;
   content: string;
+  updatedAt: number;
+  folderId?: string | null;
+};
+
+export type FolderRecord = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  order: number;
   updatedAt: number;
 };
 
@@ -49,6 +59,12 @@ export function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('images')) {
         db.createObjectStore('images', { keyPath: 'id' });
       }
+
+      if (!db.objectStoreNames.contains('folders')) {
+        const s = db.createObjectStore('folders', { keyPath: 'id' });
+        s.createIndex('parentId', 'parentId');
+        s.createIndex('order', 'order');
+      }
     };
 
     req.onsuccess = () => resolve(req.result);
@@ -84,6 +100,33 @@ export async function dbSaveDoc(doc: DocRecord): Promise<void> {
 export async function dbDeleteDoc(id: string): Promise<void> {
   const db = await getDB();
   await idbReq(db.transaction('documents', 'readwrite').objectStore('documents').delete(id));
+}
+
+// ── Folders ──────────────────────────────────────────────────────────
+
+export async function dbGetAllFolders(): Promise<FolderRecord[]> {
+  const db = await getDB();
+  return idbReq<FolderRecord[]>(
+    db.transaction('folders', 'readonly').objectStore('folders').getAll(),
+  );
+}
+
+export async function dbGetFolder(id: string): Promise<FolderRecord | null> {
+  const db = await getDB();
+  const result = await idbReq<FolderRecord | undefined>(
+    db.transaction('folders', 'readonly').objectStore('folders').get(id),
+  );
+  return result ?? null;
+}
+
+export async function dbSaveFolder(folder: FolderRecord): Promise<void> {
+  const db = await getDB();
+  await idbReq(db.transaction('folders', 'readwrite').objectStore('folders').put(folder));
+}
+
+export async function dbDeleteFolder(id: string): Promise<void> {
+  const db = await getDB();
+  await idbReq(db.transaction('folders', 'readwrite').objectStore('folders').delete(id));
 }
 
 // ── Images ───────────────────────────────────────────────────────────

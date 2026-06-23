@@ -1,14 +1,14 @@
 .landing-container {
-  max-width: 720px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 40px 24px;
 }
 
 .landing-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -18,9 +18,65 @@
   font-weight: 600;
 }
 
-.landing-header-actions {
+.landing-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.toolbar-main button {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.creation-target {
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+
+.creation-target:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.creation-target.has-target {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  color: var(--fg);
+}
+
+.creation-target #creation-target-label {
+  font-weight: 500;
+}
+
+.toolbar-main button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-sync {
   gap: 8px;
 }
 
@@ -151,7 +207,165 @@
 .doc-list {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  min-height: 80px;
+}
+
+.root-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--fg-muted);
+  font-size: 0.8125rem;
+  background: var(--bg-secondary);
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.root-drop-zone.drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
+  color: var(--accent);
+}
+
+.root-drop-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  cursor: grab;
+  border-radius: 3px;
+  touch-action: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.drag-handle:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.folder-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 8px 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.folder-row:hover {
+  border-color: var(--accent);
+}
+
+.folder-row.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-secondary));
+}
+
+.doc-item.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-secondary));
+}
+
+.folder-row.drop-target {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-secondary));
+}
+
+.folder-row.dragging,
+.doc-item.dragging {
+  opacity: 0.35;
+}
+
+.folder-row[draggable="true"],
+.doc-item[draggable="true"] {
+  -webkit-user-drag: element;
+}
+
+.folder-toggle {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 0.625rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.folder-icon {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+}
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 0;
+}
+
+.folder-name-editing,
+.doc-title-editing {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: var(--font-family);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+.doc-title-editing {
+  font-size: 0.9375rem;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.folder-name-editing:focus,
+.doc-title-editing:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .loading {
@@ -173,8 +387,8 @@
 .doc-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 10px 16px 10px 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -190,31 +404,13 @@
   min-width: 0;
 }
 
-.doc-title-input {
+.doc-title-label {
   display: block;
-  width: 100%;
   font-size: 0.9375rem;
   font-weight: 500;
-  font-family: var(--font-family);
-  color: var(--fg);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  padding: 2px 6px;
-  margin: -2px -6px;
-  transition: border-color var(--transition), background var(--transition);
-}
-
-.doc-title-input:hover {
-  border-color: var(--border);
-  background: var(--bg);
-}
-
-.doc-title-input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
-  border-color: transparent;
-  background: var(--bg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-meta {
@@ -245,32 +441,18 @@
   flex-shrink: 0;
 }
 
+.btn-open,
 .btn-focus {
   font-size: 0.8125rem;
   padding: 4px 10px;
+  flex-shrink: 0;
+}
+
+.btn-focus {
   color: var(--accent);
   border-color: var(--accent);
 }
 
 .btn-focus:hover {
   background: var(--bg-hover);
-}
-
-.btn-open {
-  font-size: 0.8125rem;
-  padding: 4px 10px;
-}
-
-.btn-delete {
-  font-size: 0.8125rem;
-  padding: 4px 8px;
-  color: var(--fg-muted);
-  border-color: transparent;
-  background: transparent;
-}
-
-.btn-delete:hover {
-  color: #cf222e;
-  background: var(--bg-hover);
-  border-color: transparent;
 }
