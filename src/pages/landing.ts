@@ -218,6 +218,7 @@ async function deleteSelected() {
     const title = getDocTitle(doc.content);
     if (!confirm(`"${title}" を削除しますか？`)) return;
     await deleteDoc(selectedItem.id);
+    scheduleAutoSync();
   }
 
   selectedItem = null;

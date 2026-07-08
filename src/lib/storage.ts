@@ -2,7 +2,8 @@ import {
   dbGetAllDocs, dbGetDoc, dbSaveDoc, dbDeleteDoc,
   dbGetAllFolders, dbGetFolder, dbSaveFolder, dbDeleteFolder,
   dbSaveImage, dbGetImage, dbDeleteImage, dbGetAllImageIds, dbGetAllImages,
-  type DocRecord, type FolderRecord, type ImageRecord,
+  dbSaveTombstone, dbGetAllTombstones, dbDeleteTombstone,
+  type DocRecord, type FolderRecord, type ImageRecord, type TombstoneRecord,
 } from './db.js';
 
 export type { FolderRecord };
@@ -10,7 +11,7 @@ export type { FolderRecord };
 // ── 型エクスポート（後方互換） ────────────────────────────────────────
 
 export type Document = DocRecord;
-export type { ImageRecord };
+export type { ImageRecord, TombstoneRecord };
 
 export type FontSize = 12 | 14 | 16 | 18 | 20;
 export type Theme = 'light' | 'dark' | 'system';
@@ -38,7 +39,31 @@ export function createNewDoc(folderId: string | null = null): Document {
 export const getAllDocs = dbGetAllDocs;
 export const getDoc    = dbGetDoc;
 export const saveDoc   = dbSaveDoc;
-export const deleteDoc = dbDeleteDoc;
+
+/**
+ * ドキュメントを削除し、墓標（tombstone）を記録する。
+ * 墓標は同期時に「削除された」ことを他デバイス／Drive へ伝播し、
+ * 既に同期済みのドキュメントが pull で復活するのを防ぐために使う。
+ */
+export async function deleteDoc(id: string): Promise<void> {
+  await dbDeleteDoc(id);
+  await dbSaveTombstone({ docId: id, deletedAt: Date.now() });
+}
+
+// ── Tombstones (削除の記録) ───────────────────────────────────────────
+
+export const getAllTombstones = dbGetAllTombstones;
+
+/** 墓標を記録する（既存より新しい削除時刻のみ更新） */
+export async function saveTombstone(docId: string, deletedAt: number): Promise<void> {
+  await dbSaveTombstone({ docId, deletedAt });
+}
+
+/** 墓標を取り除く（削除の取り消し／リモート編集による復活時） */
+export const removeTombstone = dbDeleteTombstone;
+
+/** 墓標を記録せずにローカルのドキュメントのみ削除する（同期による削除適用に使う） */
+export const hardDeleteDoc = dbDeleteDoc;
 
 // ── Images (IndexedDB) ───────────────────────────────────────────────
 
@@ -230,9 +255,11 @@ export async function deleteFolder(id: string): Promise<Set<string>> {
   const folderIdsToDelete = new Set([id, ...descendants]);
 
   const docs = await dbGetAllDocs();
+  const now = Date.now();
   for (const doc of docs) {
     if (doc.folderId && folderIdsToDelete.has(doc.folderId)) {
       await dbDeleteDoc(doc.id);
+      await dbSaveTombstone({ docId: doc.id, deletedAt: now });
     }
   }
 
