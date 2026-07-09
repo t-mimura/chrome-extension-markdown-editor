@@ -85,16 +85,16 @@ export async function syncAll(): Promise<SyncResult> {
     const folderResult = await syncFolders(syncSettings);
     result.errors.push(...folderResult.errors);
 
-    // 2. 孤立フォルダ参照の修復（ドキュメント同期前に実施し、修正を同パスで push 可能にする）
-    await repairOrphanFolderRefs();
-
-    // 3. ドキュメントの同期
+    // 2. ドキュメントの同期（削除の伝播を先に処理し、墓標対象を repair 前に除去する）
     const docResult = await syncDocuments(syncSettings);
     result.pushed += docResult.pushed;
     result.pulled += docResult.pulled;
     result.deleted += docResult.deleted;
     result.conflicts.push(...docResult.conflicts);
     result.errors.push(...docResult.errors);
+
+    // 3. 孤立フォルダ参照の修復（削除されずに残ったドキュメントのみを対象とする）
+    await repairOrphanFolderRefs();
 
     // 4. 画像の同期（ドキュメントで参照されているものを対象）
     const imgResult = await syncImages(syncSettings);
