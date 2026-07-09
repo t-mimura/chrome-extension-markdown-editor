@@ -43,6 +43,13 @@ export type FoldersSnapshot = {
   }[];
 };
 
+export type DeletionsSnapshot = {
+  version: 1;
+  updatedAt: number;
+  /** 削除されたドキュメント { [docId]: deletedAt } */
+  docs: Record<string, number>;
+};
+
 // ── 認証 ─────────────────────────────────────────────────────────────
 
 /**
@@ -204,6 +211,11 @@ export async function downloadDoc(driveFileId: string): Promise<DriveDoc> {
   return res.json() as Promise<DriveDoc>;
 }
 
+/** Drive 上のドキュメントファイルを削除する（ゴミ箱へ移さず完全削除） */
+export async function deleteDriveDoc(driveFileId: string): Promise<void> {
+  await apiFetch(`${DRIVE_API}/files/${driveFileId}`, { method: 'DELETE' });
+}
+
 export async function listRemoteDocs(): Promise<{ driveFileId: string; docId: string; updatedAt: number; charCount: number; deviceName: string }[]> {
   const folders = await getFolderIds();
   const files = await listDriveFiles(folders.documents);
@@ -253,6 +265,40 @@ export async function downloadFolders(): Promise<FoldersSnapshot | null> {
   if (!fileId) return null;
   const res = await apiFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
   return res.json() as Promise<FoldersSnapshot>;
+}
+
+// ── 削除記録（tombstones） ────────────────────────────────────────────
+
+const DELETIONS_FILE = 'deletions.json';
+
+export async function uploadDeletions(snapshot: DeletionsSnapshot): Promise<void> {
+  const folders = await getFolderIds();
+  const body = JSON.stringify(snapshot);
+  const existing = await findFileInFolder(folders.root, DELETIONS_FILE);
+
+  if (existing) {
+    await apiFetch(`${UPLOAD_API}/files/${existing}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+  } else {
+    const meta = JSON.stringify({ name: DELETIONS_FILE, parents: [folders.root] });
+    const form = buildMultipart(meta, body, 'application/json');
+    await apiFetch(`${UPLOAD_API}/files?uploadType=multipart`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${form.boundary}` },
+      body: form.body,
+    });
+  }
+}
+
+export async function downloadDeletions(): Promise<DeletionsSnapshot | null> {
+  const folders = await getFolderIds();
+  const fileId = await findFileInFolder(folders.root, DELETIONS_FILE);
+  if (!fileId) return null;
+  const res = await apiFetch(`${DRIVE_API}/files/${fileId}?alt=media`);
+  return res.json() as Promise<DeletionsSnapshot>;
 }
 
 // ── 画像操作 ──────────────────────────────────────────────────────────

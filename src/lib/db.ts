@@ -1,15 +1,16 @@
 /**
  * IndexedDB ラッパー
  *
- * DB名: markdown-editor / バージョン: 2
+ * DB名: markdown-editor / バージョン: 3
  * ストア:
  *   documents  — { id, content, updatedAt, folderId? }
  *   folders    — { id, name, parentId, order, updatedAt }
  *   images     — { id, mimeType, data: ArrayBuffer, size, createdAt }
+ *   tombstones — { docId, deletedAt }  削除されたドキュメントの墓標（同期での復活を防ぐ）
  */
 
 const DB_NAME = 'markdown-editor';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export type DocRecord = {
   id: string;
@@ -32,6 +33,11 @@ export type ImageRecord = {
   data: ArrayBuffer;
   size: number;
   createdAt: number;
+};
+
+export type TombstoneRecord = {
+  docId: string;
+  deletedAt: number;
 };
 
 function idbReq<T>(request: IDBRequest<T>): Promise<T> {
@@ -64,6 +70,10 @@ export function getDB(): Promise<IDBDatabase> {
         const s = db.createObjectStore('folders', { keyPath: 'id' });
         s.createIndex('parentId', 'parentId');
         s.createIndex('order', 'order');
+      }
+
+      if (!db.objectStoreNames.contains('tombstones')) {
+        db.createObjectStore('tombstones', { keyPath: 'docId' });
       }
     };
 
@@ -162,4 +172,23 @@ export async function dbGetAllImages(): Promise<ImageRecord[]> {
   return idbReq<ImageRecord[]>(
     db.transaction('images', 'readonly').objectStore('images').getAll(),
   );
+}
+
+// ── Tombstones ───────────────────────────────────────────────────────
+
+export async function dbSaveTombstone(record: TombstoneRecord): Promise<void> {
+  const db = await getDB();
+  await idbReq(db.transaction('tombstones', 'readwrite').objectStore('tombstones').put(record));
+}
+
+export async function dbGetAllTombstones(): Promise<TombstoneRecord[]> {
+  const db = await getDB();
+  return idbReq<TombstoneRecord[]>(
+    db.transaction('tombstones', 'readonly').objectStore('tombstones').getAll(),
+  );
+}
+
+export async function dbDeleteTombstone(docId: string): Promise<void> {
+  const db = await getDB();
+  await idbReq(db.transaction('tombstones', 'readwrite').objectStore('tombstones').delete(docId));
 }
