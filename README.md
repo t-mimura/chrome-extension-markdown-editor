@@ -94,6 +94,44 @@ npm run build
 npm run dev
 ```
 
+### リリース手順（Chrome Web Store）
+
+`package:store` はバージョンを変更せず、現在のバージョンで配布用 zip を作成します。  
+先にリリース種別（patch / minor / major）を決めてバージョンを上げてください。
+
+1. バージョンを更新（`package.json` と `manifest.json` を同時更新）
+
+```bash
+# 例: 1.1.0 -> 1.1.1
+npm run release:patch
+
+# 例: 1.1.0 -> 1.2.0
+npm run release:minor
+
+# 例: 1.1.0 -> 2.0.0
+npm run release:major
+```
+
+明示的にバージョンを指定する場合:
+
+```bash
+npm run release:version -- 1.2.3
+```
+
+2. ビルドと型チェック
+
+```bash
+npm run build
+```
+
+3. ストア提出用 zip 作成（`extension-store.zip`）
+
+```bash
+npm run package:store
+```
+
+4. Chrome Web Store Developer Dashboard で `extension-store.zip` をアップロードして公開
+
 ### 使用技術
 - [CodeMirror 6](https://codemirror.net/) — エディタ
 - [marked](https://marked.js.org/) — Markdown パーサー
