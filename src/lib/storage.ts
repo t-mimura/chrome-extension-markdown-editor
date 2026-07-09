@@ -54,7 +54,7 @@ export async function deleteDoc(id: string): Promise<void> {
 
 export const getAllTombstones = dbGetAllTombstones;
 
-/** 墓標を記録する（既存より新しい削除時刻のみ更新） */
+/** 墓標を記録する */
 export async function saveTombstone(docId: string, deletedAt: number): Promise<void> {
   await dbSaveTombstone({ docId, deletedAt });
 }

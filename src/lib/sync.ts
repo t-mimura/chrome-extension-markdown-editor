@@ -217,6 +217,11 @@ async function syncDocuments(syncSettings: SyncSettings) {
 
   const deletedDocIds = new Set<string>();
   const nextDocSyncedAt = { ...syncSettings.docSyncedAt };
+  let docSyncedAtChanged = false;
+  const markDocSynced = (docId: string) => {
+    nextDocSyncedAt[docId] = Date.now();
+    docSyncedAtChanged = true;
+  };
 
   for (const [docId, deletedAt] of deletedAtByDoc) {
     // 保持期間を過ぎた墓標は破棄（Drive にファイルが残っていない前提で GC）
@@ -226,6 +231,7 @@ async function syncDocuments(syncSettings: SyncSettings) {
       deletedAtByDoc.delete(docId);
       await removeTombstone(docId).catch(() => {});
       delete nextDocSyncedAt[docId];
+      docSyncedAtChanged = true;
       continue;
     }
 
@@ -240,9 +246,13 @@ async function syncDocuments(syncSettings: SyncSettings) {
 
     // 削除を確定：Drive とローカルの両方から取り除く
     if (remote) {
-      await deleteDriveDoc(remote.driveFileId).catch((e) => result.errors.push(`delete ${docId}: ${e}`));
-      remoteMap.delete(docId);
-      result.deleted++;
+      const deleteError = await deleteDriveDoc(remote.driveFileId).then(() => null).catch((e) => e);
+      if (deleteError) {
+        result.errors.push(`delete ${docId}: ${deleteError}`);
+      } else {
+        remoteMap.delete(docId);
+        result.deleted++;
+      }
     }
     if (local) {
       await hardDeleteDoc(docId).catch(() => {});
@@ -251,6 +261,7 @@ async function syncDocuments(syncSettings: SyncSettings) {
     // 墓標をローカルに保持（他デバイスへ伝播し続けるため）し、同期記録は破棄
     await saveTombstone(docId, deletedAt).catch(() => {});
     delete nextDocSyncedAt[docId];
+    docSyncedAtChanged = true;
     deletedDocIds.add(docId);
   }
 
@@ -264,7 +275,9 @@ async function syncDocuments(syncSettings: SyncSettings) {
     await uploadDeletions(mergedDeletions).catch((e) => result.errors.push(`deletions: ${e}`));
   }
 
-  await saveSyncSettings({ docSyncedAt: nextDocSyncedAt });
+  if (docSyncedAtChanged) {
+    await saveSyncSettings({ docSyncedAt: nextDocSyncedAt });
+  }
   syncSettings = { ...syncSettings, docSyncedAt: nextDocSyncedAt };
 
   // ── ドキュメント本体の同期 ──────────────────────────────────────────
@@ -282,7 +295,7 @@ async function syncDocuments(syncSettings: SyncSettings) {
         updatedAt: local.updatedAt, charCount: local.content.length,
         deviceName: syncSettings.deviceName, folderId: local.folderId ?? null,
       }).catch((e) => result.errors.push(`push ${local.id}: ${e}`));
-      await saveSyncSettings({ docSyncedAt: { ...syncSettings.docSyncedAt, [local.id]: Date.now() } });
+      markDocSynced(local.id);
       result.pushed++;
       continue;
     }
@@ -318,7 +331,7 @@ async function syncDocuments(syncSettings: SyncSettings) {
         updatedAt: local.updatedAt, charCount: local.content.length,
         deviceName: syncSettings.deviceName, folderId: local.folderId ?? null,
       }).catch((e) => result.errors.push(`push ${local.id}: ${e}`));
-      await saveSyncSettings({ docSyncedAt: { ...syncSettings.docSyncedAt, [local.id]: Date.now() } });
+      markDocSynced(local.id);
       result.pushed++;
     } else if (remoteNewer) {
       const remoteDoc = await downloadDoc(remote.driveFileId).catch(() => null);
@@ -329,7 +342,7 @@ async function syncDocuments(syncSettings: SyncSettings) {
           updatedAt: remoteDoc.updatedAt,
           folderId: remoteDoc.folderId ?? null,
         });
-        await saveSyncSettings({ docSyncedAt: { ...syncSettings.docSyncedAt, [local.id]: Date.now() } });
+        markDocSynced(local.id);
         result.pulled++;
       }
     }
@@ -348,10 +361,14 @@ async function syncDocuments(syncSettings: SyncSettings) {
           updatedAt: remoteDoc.updatedAt,
           folderId: remoteDoc.folderId ?? null,
         });
-        await saveSyncSettings({ docSyncedAt: { ...syncSettings.docSyncedAt, [remote.docId]: Date.now() } });
+        markDocSynced(remote.docId);
         result.pulled++;
       }
     }
+  }
+
+  if (docSyncedAtChanged) {
+    await saveSyncSettings({ docSyncedAt: nextDocSyncedAt });
   }
 
   return result;
